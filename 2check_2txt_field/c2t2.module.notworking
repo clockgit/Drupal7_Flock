@@ -1,0 +1,267 @@
+<?php
+function c2t2_add_more($form, $form_state) {	
+	$return = $form['fieldset']['expenses'];
+	return $return; 
+}
+
+
+function c2t2_form_alter(&$form, $form_state, $form_id) {
+	if($form_id == 'ticket_node_form') {
+		  ////////////////////////////////////
+		 // Set Defaults for form elements //
+		////////////////////////////////////
+		$bill_to = array(
+			'#type' => 'select',
+			'#options' => array(
+				0 => t('ESSDACK'),
+				1 => t('Client'),
+				2 => t('Other(add to notes)'),
+			),
+			'#default_value' => 1,
+			'#attributes' => array('style' => 'width:80px;',),
+			'#title' => t('Bill to'),
+		);
+		$reimburse = array(
+			'#type' => 'checkbox',
+			'#default_value' => 0,
+			'#title' => t('Reimburse'),
+		);
+		$t1 =  array(
+				'#type' => 'textfield',
+				'#title' => '$',
+				'#attributes' => array(
+					'placeholder' => 0.00,
+				),
+				'#default_value' => NULL,
+				'#size' => 6,
+				'#maxlength' => 6,
+				'#prefix' => '<div class="container-inline">',
+		);
+		$t2 = array(
+				'#type' => 'textfield',
+				'#attributes' => array(
+					'placeholder' => t('Enter notes here.'),
+				),
+				'#default_value' => NULL,
+				'#size' => '20',
+				'#maxlength' => 255,
+				'#suffix' => '</div>',
+		);
+		$type = array(
+			'#type' => 'select',
+			'#default_value' => 6,
+			'#title' => t('Type'),
+			'#options' => array(
+				1 => t('Service'),
+				2 => t('Materials'),
+				3 => t('Mileage'),
+				4 => t('Meals'),
+				5 => t('Lodging'),
+				0 => t('Other'),
+			),
+		);
+		  /////////////////////
+		 //
+		/////////////////////
+		$form['actions']['submit']['#submit'][] = 'c2t2_ticket_node_form_submit';//$form['#submit'][] = happens b4 $form['actions']['submit']['#submit'][]
+				
+		
+		
+		  //////////////////////////
+		 // add view of expenses //
+		//////////////////////////
+		$form['fieldset2'] = array(
+			'#type' => 'fieldset',
+			'#title' => t('View expenses'),
+			'#weight' => 12,
+			'#collapsible' => TRUE,
+			'#collapsed' => TRUE,//set to false if view has content
+		);
+		$display_id = 'block';
+		$view = views_get_view('expenses_by_ticket');
+		if (!empty($view)) {
+			$display = $view->execute_display($display_id);
+		}
+		$form['fieldset2']['view'] = array(
+			'#markup' => (isset($display['content']) ? '<div>' .  $display['content'] . '</div>' : '<div>Nothing to display.</div>'),
+		);
+		  ////////////////////////////
+		 // Build Default Expenses //
+		////////////////////////////
+		$form['fieldset'] = array(
+			'#type' => 'fieldset',
+			'#title' => t('Enter expenses'),
+			'#weight' => 11,
+			'#collapsible' => TRUE,
+			'#collapsed' => FALSE,//set to true if view has content
+	
+		);
+		$form['fieldset']['expenses'] = array(
+			'#type' => 'container',
+			'#weight' => -10,
+	
+			'#language' => $form['language']['#value'],
+			'#prefix' => '<div id="c2t2-add-more-wrapper">',
+			'#suffix' => '</div>',
+			'#theme' => 'field_multiple_value_form',
+			'#field_name' => 'field_c2t2_expenses',
+			'#cardinality' => '-1',
+			'#title' => 'Expenses',
+			'#required' => 0,
+			'#description' => '',
+			'add_more' => array(
+				'#type' => 'submit',
+				'#name' => 'test2_add_more',
+				'#value' => 'Add other expense',
+				'#attributes' => array(
+					'class' => array(
+						'0' => 'field-add-more-submit',
+					),
+				),
+				'#limit_validation_errors' => array(
+					'0' => array(
+						'0' => 'expenses',
+						'1' => $form['language']['#value'], 
+					),
+				),
+				'#submit' => array(
+					'0' => 'field_add_more_submit',
+				),
+				'#ajax' => array(
+					'callback' => 'c2t2_add_more',//'field_add_more_js',
+					'wrapper' => 'c2t2-add-more-wrapper',
+					'effect' => 'fade',
+					'progress' => array(
+						'type' => 'throbber',//'bar'
+						'message' => 'Adding other expense',
+					),
+				),
+			),
+			//'#after_build' => array(
+			//	'0' => 'field_form_element_after_build',
+			//),
+			'#language' => $form['language']['#value'],
+			'#field_parents' => array(),
+		);
+		/*($form['language']['#value']) => array(*/
+		for ($i=0; $i<=4; $i++) {
+			$form['fieldset']['expenses'][$i] = array(
+				'#language' => $form['language']['#value'],
+				//'#title' => 'Service',
+				//'#description' => 'Add Service expense to time ticket.',
+				'#required' => FALSE,
+				'#theme_wrappers' => array('form_element'),
+				't1' => $t1,
+				'type' => $type,
+				'bill_to' => $bill_to,
+				'reimburse' => $reimburse,
+				't2' => $t2,
+				'_weight' => array(
+						'#type' => 'weight',
+						'#title' => "Weight for row $i",
+						'#title_display' => 'invisible',
+						'#delta' => 10,
+						'#default_value' => $i,
+						'#weight' => 100,
+				), 
+			);
+			$form['fieldset']['expenses'][$i]['type']['#default_value'] = $i+1;
+		}
+		  /////////////////.///////////
+		 // Build Optional Expenses //
+		/////////////////////////////
+		$form['fieldset']['expenses']['_c2t2_counter'] = array(
+			'#type' => 'hidden',
+			'#default_value' => 0,
+		);
+		
+		dpm(array('state' => $form_state, 'form' => $form));
+		for ($i=1; $i<= $form['fieldset']['expenses']['_c2t2_counter']['#value']; $i++) {
+			dpm($i);
+		}
+				
+		
+		/*
+		if(isset($form_state['triggering_element']) && $form_state['triggering_element']['#name'] == 'test2_add_more') {
+
+			//$form_state['values']['expenses'][($form['language']['#value'])]['counter']['#value'] += 1;
+			$max = 4;//$form_state['counter']['#value'];
+			for($count = 5; $count <= $max; $count++) {
+				$form['fieldset']['expenses'][($form['language']['#value'])][$count] = array(
+					'#language' => $form['language']['#value'], 
+					//'#columns' => array('t1','t2','c1','c2'),
+					'#title' => 'Other',
+					'#required' => FALSE,
+					'#delta' => $count,
+					'#weight' => $count,
+					'#theme_wrappers' => array('form_element'),
+					't1' => $t1,
+					'type' => $type,
+					'bill_to' => $bill_to,
+					'reimburse' => $reimburse,
+					't2' =>$t2,
+					'_weight' => array(
+						    '#type' => 'weight',
+							'#title' => 'Weight for row ' . $count,
+							'#title_display' => 'invisible',
+							'#delta' => 10,
+							'#default_value' => $count,
+							'#weight' => 100,
+					),
+				);	
+			}		
+		}*/
+	}
+}
+
+
+  ///////////////////////////////////
+ // Submit sub nodes on node save //
+///////////////////////////////////
+function c2t2_ticket_node_form_submit($form, &$form_state) {
+	$master_nid = $form_state['values']['nid'];
+	$master_vid = $form_state['values']['vid'];
+	$master_title = $form_state['values']['title'];
+	$lang = $form_state['values']['language'];
+	$node_list = $form_state['values']['expenses'][($form_state['values']['language'])];
+	unset($node_list['add_more']);
+	unset($node_list['counter']);
+	foreach($node_list as $node_values) {
+		if($node_values['t1']) {
+			$node = new stdClass();
+			$node->type = 'expense_2_0';
+			node_object_prepare($node);
+			$node->is_new = TRUE;
+			$node->uid = $form_state['values']['uid'];
+			if(!empty($node_values['t2'])) {
+				$node->title = $node_values['t2'];
+			}else {
+				$node->title = $node_values['type'] . ' expense for: '. $form_state['values']['nid'];
+			}
+			$node->language = $form_state['values']['language'];
+			
+			
+			$node->field_exp_amount[($lang)][0]['value'] = $node_values['t1'];
+			$node->field_exp_type[($lang)][0]['value'] = $node_values['type'];
+			$node->field_exp_bill[($lang)][0]['value'] = $node_values['bill_to'];
+			$node->field_exp_reimburse[($lang)][0]['value'] = $node_values['reimburse'];
+			$node->field_expense_notes[($lang)][0]['value'] = $node_values['t2'];
+			$node->field_ticket_ref[($lang)][0]['nid'] = $master_nid;
+			node_save($node);
+			
+			$node_link = l(t('view'), 'node/' . $node->nid);
+			$watchdog_args = array(
+				'@type' => $node->type,
+				'%title' => $node->title,
+			);
+			$t_args = array(
+				'@type' => node_type_get_name($node),
+				'%title' => $node->title,
+				'%path' => 'node/' . $node->nid,
+			);
+			watchdog('content', '@type: added %title.', $watchdog_args, WATCHDOG_NOTICE, $node_link);
+			drupal_set_message(t('@type %title has been created.' . $node_link, $t_args));
+		}
+	}
+	unset($node_values);
+}

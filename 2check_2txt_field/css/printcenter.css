@@ -1,0 +1,36 @@
+#c2t2-special-page > div > div {
+  clear: both;
+}
+
+#c2t2-special-page > div > .form-item-numPages {
+  float: right;
+  clear: right;
+}
+#c2t2-special-page > div > .form-item-copies {
+  float: left;
+  clear: left;
+}
+#c2t2-special-page > div > .form-item-sides {
+  clear: both;
+}
+
+#c2t2-special-page > div > #paper-div {
+  display: inline-block;
+  width: 600px;
+}
+
+.form-item.form-type-checkbox,
+.form-item.form-type-radio {
+  display: inline-block;
+  padding: 0 4px;
+  vertical-align: top;
+}
+
+#paper-div div div {
+  display: inline-block;
+  padding: 0 4px;
+}
+
+html.js fieldset:not(.collapsible) > legend > .fieldset-legend {
+  background: none;
+}

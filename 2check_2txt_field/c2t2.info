@@ -1,0 +1,6 @@
+name = 2 Check 2 Text
+description = Customizations for internal invoicing system
+package = '- clock'
+version = 7.x-1.0-dev unstable
+core = 7.x
+stylesheets[all][] = /css/custom.css

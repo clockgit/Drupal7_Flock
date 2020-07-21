@@ -1,0 +1,541 @@
+<?php
+function c2t2_menu() {
+	$items['admin/custom'] = array(
+		'title' => 'CUSTOM',
+		'description' =>  'Settings for Custom Modules by Chris Lock',
+		'page callback' => 'custom_main',
+		'access arguments' => array('access administration pages'),
+		'weight' => 200,
+	);
+	$items['admin/custom/c2t2'] = array(
+		'title' => 'c2t2 (expense) settings',
+		'description' =>  'Settings for c2t2 (expense) field',
+		'page callback' => 'drupal_get_form',
+		'page arguments' => array('c2t2_admin_settings'),
+		'access arguments' => array('administer site configuration'),
+		'weight' => -60,
+		'position' => 'left'
+	);
+	
+	$items['admin/config/c2t2'] = array(
+		'title' => 'c2t2 (expense) settings',
+		'description' =>  'Settings for c2t2 (expense) field',
+		'page callback' => 'drupal_get_form',
+		'page arguments' => array('c2t2_admin_settings'),
+		'access arguments' => array('administer site configuration'),
+	);
+	return $items;
+}
+
+function c2t2_admin_settings() {
+	$form['c2t2_mileage'] = array('#type' => 'textfield',
+		'#title' => t('Mileage rate'),
+		'#default_value' => variable_get('c2t2_mileage', .51),
+		'#description' => t('')
+	);
+	
+	return system_settings_form($form);
+}
+
+function c2t2_build_block_goto_form($form, &$form_state) {
+	$form = array(
+		'node'=>array(
+			'#type' => 'textfield',
+			'#title' => t('#FL-'),
+			'#default_value' => '',
+			'#size' => 6,
+			'#maxlength' => 6,
+			'#required' => TRUE,
+			'#element_validate' => array('_element_validate_integer'),
+		),
+		'submit' => array(
+			'#type' => 'submit',
+			'#value' => t('Go'),
+		),
+	);
+	return $form;
+}
+
+function c2t2_build_block_goto_form_submit ($form, &$form_state) {
+}
+
+function c2t2_build_block_goto_form_validate ($form, &$form_state) {
+	$nid = $form_state['values']['node'];
+	drupal_goto("node/$nid");
+}
+
+function get_c2t2_options() {
+	$serialized_data = db_query("SELECT data  FROM field_config WHERE field_name = :name", array(':name' =>'field_exp_type'))->fetchField();
+	$unserialized_data = unserialize($serialized_data);
+	$values = array();
+	foreach($unserialized_data['settings']['allowed_values'] as $key => $value) {
+	  $values[$key] = $value;
+	}
+	return $values;
+}
+
+function _element_validate_notes($element, &$form_state) {
+	if($form_state['values']['expenses'][1]['amount'] != '') {
+		if($element['#value'] == 'DEFINE SERVICE THAT WAS PERFORMED!!' || strlen(trim($element['#value'])) == 0) {
+			form_error($element, t('%name must be entered for the service expense. Please define the service that was performed', array('%name' => $element['#title'])));
+		}
+	}
+}
+/*
+function _element_validate_customer($element, &$form_state) {
+	//dpm(array($element, $form_state));
+	if($form_state['values']['field_customer'][LANGUAGE_NONE][0]['value'] == -1) {
+		form_error($element, t('%name must be entered. The customer list is an auto-complete field, type in a few letters and then select the desired customer. You must select a customer from the list, if you do not see the desired customer talk to the business office to have them added.', array('%name' => $element[LANGUAGE_NONE]['#title'])));
+	}
+}
+*/
+function c2t2_form_alter(&$form, $form_state, $form_id) {
+	
+	if($form_id == 'ticket_node_form') {
+		/* Old Customer field */
+		#$form['field_customer']['#element_validate'][] = '_element_validate_customer';
+		$form['field_customer']['#access'] = 0;
+		
+		  ///////////////////////////
+		 // Grab project from url //
+		///////////////////////////
+		$form['field_project']['und']['#default_value'] = !empty($form['field_project']['und']['#default_value']) ? $form['field_project']['und']['#default_value'] : arg(3);		
+		
+		$form['actions']['submit']['#submit'][] = 'c2t2_ticket_node_form_submit';
+				
+		
+		  //////////////////////////
+		 // add view of expenses //
+		//////////////////////////
+        /*
+		$form['fieldset2'] = array(
+			'#type' => 'fieldset',
+			'#title' => t('View expenses'),
+			'#weight' => 12,
+			'#collapsible' => TRUE,
+			'#collapsed' => TRUE,
+		);
+		$display_id = 'block';
+		$view = views_get_view('expenses_by_ticket');
+		if (!empty($view)) {
+			$display = $view->execute_display($display_id);
+		}
+		$form['fieldset2']['view'] = array(
+			'#markup' => (isset($display['content']) ? '<div>' .  $display['content'] . '</div>' : '<div>Nothing to display.</div>'),
+		);
+        */
+		
+		  ////////////////////////////
+		 // Build Default Expenses //
+		////////////////////////////
+		//dpm($form_state);
+		if(isset($form_state['values']['expenses']['und']['counter'])) {
+			$collapsed = FALSE;
+		}else {
+			$collapsed = FALSE;//TRUE;
+		}
+		
+		$form['fieldset'] = array(
+			'#type' => 'fieldset',
+			'#title' => t('Enter expenses'),
+			'#weight' => 20,
+			'#collapsible' => TRUE,
+			'#collapsed' => $collapsed,
+			'#prefix' => '<div id="c2t2-add-more-wrapper">',
+			'#suffix' => '</div>',
+			'#description' => '<span style="color:#F00;">Any notes that need to be on the customer invoice should be added in the notes field for the expense.</span>',
+			//<br />If the bill needs to be sent to the attention of someone please enter it in the ATTN: Field.
+		);
+		$form['fieldset']['field_attn'] = $form['field_attn'];
+		unset($form['field_attn']);
+        $form['fieldset']['field_attn']['#weight'] = 0;
+		
+		$form['fieldset']['field_po'] = $form['field_po'];
+		unset($form['field_po']);
+        $form['fieldset']['field_po']['#weight'] = 2;
+		
+		$form['fieldset']['expenses'] = array(
+			'#weight' => 4,
+			'#tree' => TRUE,
+			'#field_name' => 'field_c2t2_expenses',
+			'#cardinality' => '-1',
+			'#type' => 'container',
+			'#language' => $form['language']['#value'],
+			'#theme' => 'field_multiple_value_form',
+			'#theme_wrappers' => array('form_element'),
+			'#title' => 'Expenses',
+			'#title_display' => 'invisible',
+			'#description' => '',
+			'#field_parents' => array(),
+			'add_more' => array(
+				'#type' => 'submit',
+				'#name' => 'test2_add_more',
+				'#value' => 'Add other expense',
+				'#attributes' => array('class' => array('0' => 'field-add-more-submit',),),
+				'#limit_validation_errors' => array(
+					'0' => array('0' => 'expenses','1' => $form['language']['#value'], ),
+				),
+				'#submit' => array(
+					'0' => 'field_add_more_submit',
+				),
+				'#ajax' => array(
+					'callback' => 'c2t2_add_more',
+					'wrapper' => 'c2t2-add-more-wrapper',
+					'effect' => 'fade',
+					'progress' => array(
+						'type' => 'throbber',//'bar'
+						'message' => 'Adding other expense',
+					),
+				),
+			),
+		);
+		foreach (get_c2t2_options() as $key => $value) {
+			if ($key > 0) {
+				switch($value){
+					case 'Mileage': $textbox = miles(); $button = update_miles($key); break;
+					case 'Print Center Book': $textbox = book($key); /*$button = update_book($key);*/ break;
+					default: $button = $textbox = NULL;
+				}
+				$form['fieldset']['expenses'][$key] = array(
+					'#prefix' => "<div id=\"c2t2-mileage-$key\" class=\"expense\">",
+					'#suffix' => '</div>',
+					'#language' => $form['language']['#value'],
+					'#title' => $value,
+					'#theme_wrappers' => array('form_element'),
+					'textbox' => $textbox,
+					'update_button' => $button,
+					'amount' => amount(),
+					'type' => c2t2_type($key),
+					'bill_to' => bill_to(),
+					'reimburse' => reimburse(),	
+					'notes' => ($key == 1) ? notes1() : notes(),
+					//'receipt' => receipt(),
+					'_weight' => _weight($key),
+				);
+				$form['fieldset']['expenses'][$key]['type']['#default_value'] = $key;
+				$form['fieldset']['expenses'][$key]['type']['#type'] = 'hidden';				
+			}
+		}
+		  //////////////////////////
+		 // Build Other Expenses //
+		//////////////////////////	
+		
+		$form['fieldset']['expenses']['und']['counter']= array(
+			'#type' => 'hidden',
+			'#default_value' => 0,
+			'#prefix' => '<li>Add Expenses below, You will not be able to edit expenses once you have saved the form.',
+			'#suffix' => '</li>',
+			//'#access' => FALSE,
+		);
+
+		if( isset( $form_state['values'] ) && isset( $form_state['values']['expenses']['und']['counter'] ) ) {
+			for($i = 0; $i < ($form_state['values']['expenses']['und']['counter'] + 1); $i++) {
+				$count = $i + count(get_c2t2_options());
+				//dpm($form['fieldset']['expenses'][$count], $count);
+				$op = get_c2t2_options();
+				$value = $op[0];
+				switch($value){
+					case 'Mileage': $textbox = miles(); $button = update_miles($count); break;
+					case 'Print Center Book': $textbox = book($count);/* $button = update_book($key);*/ break;
+					default: $button = $textbox = NULL;
+				}
+				$form['fieldset']['expenses'][$count] = array(
+					'#prefix' => "<div id=\"c2t2-mileage-$count\" class=\"expense\">",
+					'#suffix' => '</div>',
+					'#language' => $form['language']['#value'], 
+					'#title' => $value,
+					'#theme_wrappers' => array('form_element'),
+					'textbox' => $textbox,
+					'update_button' => $button,
+					'amount' => amount(),
+					'type' => c2t2_type($count),
+					'bill_to' => bill_to(),
+					'reimburse' => reimburse(),
+					'notes' => notes(),//notes1()
+					//'receipt' => receipt(),
+					'_weight' => _weight($count),
+				);
+				//dpm($form['fieldset']['expenses'][$count], $count);
+			}
+		}
+	}
+}
+
+  ///////////////////////////////////
+ // Submit sub nodes on node save //
+///////////////////////////////////
+function c2t2_ticket_node_form_submit($form, &$form_state) {
+	//dpm($form_state['node']);
+	$master_nid = $form_state['values']['nid'];
+	$master_vid = $form_state['values']['vid'];
+	$master_title = $form_state['values']['title'];
+	$lang = $form_state['values']['language'];
+	$node_list = $form_state['values']['expenses'];
+	unset($node_list['add_more']);
+	unset($node_list['und']);
+	//dpm($node_list);
+	$options = get_c2t2_options();
+	foreach($node_list as $node_values) {
+		if($node_values['amount'] != 0) {//changed from > 0 to allow credits
+			//dpm($node_values);
+			$node = new stdClass();
+			$node->type = 'expense_2_0';
+			node_object_prepare($node);
+			$node->is_new = TRUE;
+			$node->uid = $form_state['values']['uid'];
+			$node->title = '(' . $form_state['values']['name'] . ') $' . $node_values['amount'] . ' ' . $options[($node_values['type'])] . ' expense for: '. $form_state['values']['nid'] ;
+			$node->language = $form_state['values']['language'];
+			$node->field_exp_amount[$lang][0]['value'] = $node_values['amount'];
+			$node->field_exp_type[$lang][0]['value'] = $node_values['type'];
+			$node->field_exp_bill[$lang][0]['value'] = $node_values['bill_to'];
+			$node->field_exp_reimburse[$lang][0]['value'] = $node_values['reimburse'];
+			$node->field_expense_notes[$lang][0]['value'] = $node_values['notes'];
+			$node->field_ticket_ref[$lang][0]['nid'] = $master_nid;
+			node_save($node);
+			//dpm($node);
+			$node_link = l(t('view'), 'node/' . $node->nid);
+			$watchdog_args = array(
+				'@type' => $node->type,
+				'%title' => $node->title,
+			);
+			$t_args = array(
+				'@type' => node_type_get_name($node),
+				'%title' => $node->title,
+				'%path' => 'node/' . $node->nid,
+			);
+			watchdog('content', '@type: added %title.', $watchdog_args, WATCHDOG_NOTICE, $node_link);
+			drupal_set_message(t('@type %title has been created.' . $node_link, $t_args));
+		}
+	}
+	unset($node_values);
+	unset($node_list);
+	unset($node);
+}
+
+/* ajax functions */
+function c2t2_add_more($form, $form_state) {
+	//$button = $form_state['triggering_element'];
+	$form['fieldset']['expenses']['und']['counter']['#value'] = ($form['fieldset']['expenses']['und']['counter']['#value'] + 1);
+	$return = $form['fieldset'];
+	return $return; 
+}
+function c2t2_change_type($form, $form_state) {
+	$button = $form_state['triggering_element'];
+	$key = $button['#array_parents'][2];
+	$value = $button['#options'][$button['#value']];
+	switch($value){
+		case 'Mileage': $textbox = miles($key); break;
+		case 'Print Center Book': $textbox = book($key); break;
+		default: $button = $textbox = NULL;
+	}
+	$form['fieldset']['expenses'][$key]['textbox'] = $textbox;
+	$form['fieldset']['expenses'][$key]['#title'] = $value;
+	$return = $form['fieldset']['expenses'][$key];
+	unset($return['_weight']);
+	return $return; 
+}
+function c2t2_calc_mileage($form, $form_state) {
+	$button = $form_state['triggering_element'];
+	$key = $button['#array_parents'][2];
+	$ppm = variable_get('c2t2_mileage', .51);
+	$form['fieldset']['expenses'][$key]['amount']['#value'] = $form['fieldset']['expenses'][$key]['textbox']['#value'] * $ppm;
+	$form['fieldset']['expenses'][$key]['notes']['#value'] = $form['fieldset']['expenses'][$key]['textbox']['#value'] . " miles at $$ppm/mile";
+	$return = $form['fieldset']['expenses'][$key];
+	unset($return['_weight']);
+	return $return; 
+}
+
+////////////////////////////////////
+ // Set Defaults for form elements //
+////////////////////////////////////
+function reimburse() {
+	return array(
+		'#type' => 'checkbox',
+		'#default_value' => 0,
+		'#title' => t('Reimburse'),
+	);
+}
+function notes() {
+	return array(
+		'#type' => 'textfield',
+		'#attributes' => array(
+			'placeholder' => t('Enter notes here. Displayed on Customer Invoice'),
+			'class' => array('notes'),
+		),
+		'#default_value' => NULL,
+		'#size' => '50',
+		'#maxlength' => 255,
+		'#suffix' => '</div>',
+		'#title' => "Notes:",
+	);
+}
+function notes1() {
+	return array(
+		'#type' => 'textfield',
+		'#attributes' => array(
+			'placeholder' => t('DEFINE SERVICE THAT WAS PERFORMED!!'),
+		),
+		'#default_value' => t('DEFINE SERVICE THAT WAS PERFORMED!!'),
+		'#title' => "Notes:",
+		'#size' => '50',
+		'#maxlength' => 255,
+		'#suffix' => '</div>',
+		'#element_validate' => array('_element_validate_notes'),
+	);
+}
+function book($row) {
+	$ds_page_price = variable_get('c2t2_page', .021);
+	$jquery = "var books = jQuery(this).parent().find('.books').val();
+		var pages = jQuery(this).parent().find('.pages').val();
+		var ds_page_price = $ds_page_price;
+		var ds_pages = pages/2;
+		var book_price = (ds_pages * ds_page_price) / 2;
+		var total = books * book_price;
+		rounded_total = Math.ceil(total * 100) / 100;//Round the number up to a whole penny
+		jQuery(this).closest('.expense').find('.amount').val(rounded_total);
+		jQuery(this).closest('.expense').find('.notes').val(pages + ' pages in each book. ' + pages + '/2 = ' + ds_pages + ' DS pages at ' + ds_page_price + ' per page = $' + (ds_pages * ds_page_price).toFixed(3) + '/2 = $' + book_price.toFixed(3) + ' per book * ' + books + ' = $' + total.toFixed(3) + ' or rounded to $' + rounded_total + ' total');";
+	return array(
+		'#type' => 'container',
+		'#prefix' => "<div class=\"container-inline\">",
+		'#suffix' => '</div>',
+		'#attributes' => array(
+			'class' => array('book_calc'),
+		),
+		'books' => array(
+			'#type' => 'textfield',
+			'#attributes' => array(
+				'placeholder' => 0,
+				'class' => array('books'),
+			),
+			'#default_value' => NULL,
+			'#size' => '8',
+			'#maxlength' => 8,
+			'#description' => 'books',
+		),
+		'pages' => array(
+			'#type' => 'textfield',
+			'#attributes' => array(
+				'placeholder' => 0,
+				'class' => array('pages'),
+			),
+			'#default_value' => NULL,
+			'#size' => '8',
+			'#maxlength' => 8,
+			'#description' => 'pages in book',	
+		),
+		'button' => array(
+			'#type' => 'button',
+			'#name' => 'calc_' . $row,
+			'#button_type' => 'small',
+			'#value' => 'Calculate',
+			'#attributes' => array('onclick' => "$jquery return false;", 'class' => array('calculate')),
+			'#executes_submit_callback' => FALSE,
+		),
+	);
+}
+function miles() {
+	return array(
+		'#type' => 'textfield',
+		'#attributes' => array(
+			'placeholder' => 0,
+		),
+		'#default_value' => NULL,
+		'#size' => '8',
+		'#maxlength' => 8,
+		'#description' => 'Enter total miles traveled.',
+			'#prefix' => "<div class=\"container-inline\">",
+	);
+}
+function update_miles($row) { 
+	return array(
+		'#type' => 'submit',
+		'#name' => 'calc_' . $row,
+		'#button_type' => 'small',
+		'#value' => 'Calculate',
+		'#suffix' => '</div>',
+		'#limit_validation_errors' => array(/*'0' => array('0' => 'fieldset', '1' => 'expenses', ),*/),
+		'#submit' => 'c2t2_calc_mileage',
+		'#ajax' => array(
+			'callback' => 'c2t2_calc_mileage',
+			'wrapper' => "c2t2-mileage-$row",
+		),
+	);
+}
+function c2t2_element_validate_number($element, &$form_state) {
+  $value = $element['#value'];
+  if ($value != '' && !is_numeric($value)) {
+    form_error($element, t('%name must be a number, it may not contain commas or $. You entered: %value', array('%name' => $element['#title'], '%value' => $value)));
+  }
+}
+function amount() {
+	return array(
+			'#type' => 'textfield',
+			'#title' => '$',
+			'#attributes' => array(
+				'placeholder' => 0.00,
+				'class' => array('amount'),
+			),
+			'#default_value' => NULL,
+			'#size' => 6,
+			'#maxlength' => 10,
+			'#prefix' => '<div class="container-inline">',
+			'#element_validate' => array('c2t2_element_validate_number'),		
+	);
+}
+function c2t2_type($row) { 
+	return array(
+		'#type' => 'select',
+		'#default_value' => 0,
+		'#title' => t('Type'),
+		'#options' => get_c2t2_options(),
+		'#ajax' => array(
+			'callback' => 'c2t2_change_type',
+			'wrapper' => "c2t2-mileage-$row",
+			//'wrapper' => 'c2t2-add-more-wrapper',
+			'effect' => 'fade',
+			'progress' => array(
+				'type' => 'throbber',//'bar'
+				'message' => 'Hold your horses',
+			),
+		),
+	);
+}
+function bill_to() {
+	return array(
+		'#type' => 'select',
+		'#options' => array(
+			0 => t('ESSDACK'),
+			1 => t('Client'),
+			/*2 => t('Other(add to notes)'),*/
+		),
+		'#default_value' => 1,
+		'#attributes' => array('style' => 'width:80px;',),
+		'#title' => t('Bill to'),
+	);
+}
+function receipt() {
+	return array(
+		'#type' => 'file',
+		'#title' => 'Receipt',
+		//'#attributes' => array('style' => 'width:80px;',),
+	);
+}
+function _weight($row) {
+	return array(
+		'#type' => 'weight',
+		'#title' => "Weight for row $row",
+		'#title_display' => 'invisible',
+		'#delta' => 50,
+		'#default_value' => $row,
+		'#suffix' => '</div>',
+	);
+}
+
+
+/**
+* Implements hook_query_TAG_alter()
+*/
+function c2t2_query_customer_alter(QueryAlterableInterface $query) {
+    $query->leftJoin('field_data_field_parent', 'p', 'node.nid = p.entity_id');
+    $query->isNull('p.field_parent_target_id');
+}

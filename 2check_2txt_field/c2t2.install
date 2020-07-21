@@ -1,0 +1,45 @@
+<?php
+
+/**
+ * @file
+ * Install, update and uninstall functions for the double field module.
+ */
+
+
+/**
+ * Implements hook_field_schema().
+ */
+function c2t2_field_schema($field) {
+	$return = array();
+
+  $return['columns'] = array(
+    't1' => array(
+      'type' => 'varchar',
+      'length' => $field['settings']['t1'],
+      'not null' => FALSE,
+    ),
+    't2' => array(
+      'type' => 'varchar',
+      'length' => $field['settings']['t2'],
+      'not null' => FALSE,
+    ),
+	'c1' => array(
+      'type' => 'int',
+      'size' => 'tiny',
+      'not null' => FALSE,
+    ),
+	'c2' => array(
+      'type' => 'int',
+      'size' => 'tiny',
+      'not null' => FALSE,
+    ),
+  );
+ $return['indexes'] = array(
+    /* 't1' => array('t1'),
+    't2' => array('t2'),
+	'c1' => array('c1'),
+    'c2' => array('c2'),*/
+  );
+
+  return $return;
+}

@@ -1,0 +1,61 @@
+#edit-expenses-1-notes{
+  color: #F00 !important;
+}
+  
+.c2t2{
+  position: relative;  
+  left: 0px;
+  top: 0px;
+  width: 100%;
+  clear: both;
+}
+.c2t2-t1{
+  color:#03C;
+  width: 5em;
+  overflow: hidden;
+  float: left;
+}
+.c2t2-t2{
+  color:#F00;
+  width: 20em;
+  overflow: hidden;
+  float: left;
+}
+
+input.form-small{
+  cursor: pointer;
+  padding: 1px 4px;
+  margin-bottom: 1em;
+  margin-right: 1em;
+  color: #5a5a5a;
+  text-align: center;
+  font-weight: normal;
+  font-size: .7em;
+  font-family: "Lucida Grande", Verdana, sans-serif;
+  border: 1px solid #e4e4e4;
+  border-bottom: 1px solid #b4b4b4;
+  border-left-color: #D2D2D2;
+  border-right-color: #D2D2D2;
+/*  background: url(images/buttons.png) 0 0 repeat-x;
+*/
+  -moz-border-radius: 10px;
+  -webkit-border-radius: 10px;
+  border-radius: 10px;
+}  
+
+.date-display-range,
+.date-clear-block {
+  display: inline-block !important;
+}
+.date-clear-block .description {
+  display: none;
+}
+.form-type-textfield label {
+  display: inline-block;
+}
+.editablefield-item .form-text {
+  width: 4em;
+}
+div.form-item-field-project-und label {
+	display:inline;
+}
